@@ -1,0 +1,23 @@
+{
+    "compilerOptions": {
+        "baseUrl": "./",
+        "esModuleInterop": true,
+        "jsx": "react-jsx",
+        "lib": ["es2020", "dom"],
+        "module": "esnext",
+        "moduleResolution": "node",
+        "paths": {
+            "*": ["./source/*"]
+        },
+        "resolveJsonModule": true,
+        "sourceMap": false,
+        "target": "es2019",
+        "typeRoots": [
+            "./node_modules/@types",
+            "./source"
+        ],
+        "noImplicitAny": false
+    },
+    "exclude": ["docs", "node_modules", "**/*.spec.ts"],
+    "include": ["**/*.ts", "**/*.tsx", "source/custom.d.ts"]
+}
