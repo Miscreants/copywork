@@ -100,7 +100,7 @@ export const Writer = styled.div`
     top: 0;
     right: 0;
     position: absolute;
-    z-index: 3;
+    z-index: 1;
 `;
 
 export const ErrorContent = styled.div`
