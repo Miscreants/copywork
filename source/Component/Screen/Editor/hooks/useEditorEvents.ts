@@ -10,43 +10,39 @@ export function useEditorEvents(
 ) {
     useEffect(() => {
         const onClick = contentToCopy
-            ? (e: MouseEvent) => {
-                  const target = e.target as HTMLElement;
-                  
-                  if (target.classList.contains('word') && writerRef.current) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      
-                      const position = getWordStartPosition(contentToCopy, target);
-                      const textBefore = contentToCopy.substring(0, position);
-                      
-                      writerRef.current.innerHTML = textBefore;
-                      writerRef.current.focus();
-                      
-                      const selection = window.getSelection();
-                      const range = document.createRange();
-                      range.selectNodeContents(writerRef.current);
-                      range.collapse(false);
-                      selection?.removeAllRanges();
-                      selection?.addRange(range);
-                      
-                      return;
-                  }
-                  
-                  if (target?.dataset?.editor || target?.dataset?.dontstealfocus) return;
-                  if (!writerRef.current) return;
+    ? (e: MouseEvent) => {
+          const target = e.target as HTMLElement;
 
-                  const range = document.createRange();
-                  range.selectNodeContents(writerRef.current);
-                  range.collapse(false);
+          if (writerRef.current && target.classList.contains('word')) {
+              e.preventDefault();
+              e.stopPropagation();
 
-                  const selection = window.getSelection();
-                  if (!selection) return;
-                  
-                  selection.removeAllRanges();
-                  selection.addRange(range);
-              }
-            : undefined;
+              const position = getWordStartPosition(contentToCopy, target);
+              writerRef.current.innerHTML = contentToCopy.substring(0, position);
+              writerRef.current.focus();
+
+              const range = document.createRange();
+              range.selectNodeContents(writerRef.current);
+              range.collapse(false);
+
+              const selection = window.getSelection();
+              selection?.removeAllRanges();
+              selection?.addRange(range);
+              return;
+          }
+
+          if (!writerRef.current || target?.dataset?.editor || target?.dataset?.dontstealfocus) return;
+
+          const range = document.createRange();
+          range.selectNodeContents(writerRef.current);
+          range.collapse(false);
+
+          const selection = window.getSelection();
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+      }
+    : undefined;
+
 
         const onPaste = contentToCopy
             ? (e: Event) => {
