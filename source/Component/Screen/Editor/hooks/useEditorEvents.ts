@@ -10,43 +10,39 @@ export function useEditorEvents(
 ) {
     useEffect(() => {
         const onClick = contentToCopy
-            ? (e: MouseEvent) => {
-                  const target = e.target as HTMLElement;
-                  
-                  if (target.classList.contains('word') && writerRef.current) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      
-                      const position = getWordStartPosition(contentToCopy, target);
-                      const textBefore = contentToCopy.substring(0, position);
-                      
-                      writerRef.current.innerHTML = textBefore;
-                      writerRef.current.focus();
-                      
-                      const selection = window.getSelection();
-                      const range = document.createRange();
-                      range.selectNodeContents(writerRef.current);
-                      range.collapse(false);
-                      selection?.removeAllRanges();
-                      selection?.addRange(range);
-                      
-                      return;
-                  }
-                  
-                  if (target?.dataset?.editor || target?.dataset?.dontstealfocus) return;
-                  if (!writerRef.current) return;
+    ? (e: MouseEvent) => {
+          const target = e.target as HTMLElement;
 
-                  const range = document.createRange();
-                  range.selectNodeContents(writerRef.current);
-                  range.collapse(false);
+          if (writerRef.current && target.classList.contains('word')) {
+              e.preventDefault();
+              e.stopPropagation();
 
-                  const selection = window.getSelection();
-                  if (!selection) return;
-                  
-                  selection.removeAllRanges();
-                  selection.addRange(range);
-              }
-            : undefined;
+              const position = getWordStartPosition(contentToCopy, target);
+              writerRef.current.innerHTML = contentToCopy.substring(0, position);
+              writerRef.current.focus();
+
+              const range = document.createRange();
+              range.selectNodeContents(writerRef.current);
+              range.collapse(false);
+
+              const selection = window.getSelection();
+              selection?.removeAllRanges();
+              selection?.addRange(range);
+              return;
+          }
+
+          if (!writerRef.current || target?.dataset?.editor || target?.dataset?.dontstealfocus) return;
+
+          const range = document.createRange();
+          range.selectNodeContents(writerRef.current);
+          range.collapse(false);
+
+          const selection = window.getSelection();
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+      }
+    : undefined;
+
 
         const onPaste = contentToCopy
             ? (e: Event) => {
@@ -273,64 +269,143 @@ function handleIgnorePunctuation(e: KeyboardEvent, contentToCopy: string | undef
     return true;
 }
 
-function handleAutocorrect(e: KeyboardEvent, contentToCopy: string | undefined, writer: Node, addSpace = true): boolean {
+function handleAutocorrect(
+    e: KeyboardEvent,
+    contentToCopy: string | undefined,
+    writer: Node,
+    addSpace = true
+  ): boolean {
     if (!contentToCopy) return false;
-
+  
     const selection = window.getSelection();
     if (!selection) return false;
-
+  
     const range = selection.getRangeAt(0);
-    const node = range.startContainer === writer ? writer.lastChild : range.startContainer;
+    const node =
+      range.startContainer === writer ? writer.lastChild : range.startContainer;
     if (!node || node.textContent === null) return false;
-
+  
     // Get current position in the overall text
-    const fullText = writer.textContent || '';
+    const fullText = writer.textContent || "";
     const currentPosition = getTextPosition(writer, node, range.startOffset);
-
-    // Get the word boundaries in the target content
+  
+    // Find the starting boundary
     const start = getPreviousSpace(fullText, currentPosition);
-    const end = getNextSpace(contentToCopy, currentPosition);
-
-    const willAddSpace = addSpace && end < contentToCopy.length;
-
+  
+    // First find the next punctuation or space
+    let punctuationPos = -1;
+    for (let i = currentPosition; i < contentToCopy.length; i++) {
+      if (
+        NotAlphanumericRegex.test(contentToCopy[i]) ||
+        contentToCopy[i] === " "
+      ) {
+        punctuationPos = i;
+        break;
+      }
+    }
+  
+    // If we found punctuation, determine if we should jump over it
+    let end = punctuationPos;
+    if (
+      punctuationPos !== -1 &&
+      NotAlphanumericRegex.test(contentToCopy[punctuationPos])
+    ) {
+      // Look for the start of the next word
+      for (let i = punctuationPos + 1; i < contentToCopy.length; i++) {
+        if (
+          !NotAlphanumericRegex.test(contentToCopy[i]) &&
+          contentToCopy[i] !== " "
+        ) {
+          // Found the start of next word
+          end = punctuationPos;
+          break;
+        }
+      }
+    }
+  
+    if (end === -1) end = contentToCopy.length;
+  
     const enteredWord = fullText.slice(start, currentPosition);
     const targetWord = contentToCopy.slice(start, end);
-
-    if (enteredWord === targetWord) return false;
-
-    // Only replace if we're at a word boundary
-    if (currentPosition > start && (e.key === ' ' || currentPosition === end)) {
-        // Find the correct text node to replace
+  
+    if (enteredWord === targetWord && punctuationPos !== -1) {
+      // If we're at punctuation, move cursor to next word
+      if (NotAlphanumericRegex.test(contentToCopy[punctuationPos])) {
+        let nextWordStart = punctuationPos + 1;
+        // Skip over punctuation
+        for (let i = punctuationPos + 1; i < contentToCopy.length; i++) {
+          if (
+            !NotAlphanumericRegex.test(contentToCopy[i]) &&
+            contentToCopy[i] !== " "
+          ) {
+            nextWordStart = i;
+            break;
+          }
+        }
+  
+        // Find the correct text node to modify
         let currentNode = writer.firstChild;
         let currentOffset = 0;
-        
+  
         while (currentNode) {
-            const nodeLength = currentNode.textContent?.length || 0;
-            if (currentOffset + nodeLength >= start) {
-                // This is the node we want to modify
-                if (currentNode.nodeType === Node.TEXT_NODE) {
-                    const beforeText = currentNode.textContent?.slice(0, start - currentOffset) || '';
-                    const afterText = currentNode.textContent?.slice(end - currentOffset) || '';
-                    
-                    // Replace the content
-                    currentNode.textContent = beforeText + targetWord + (willAddSpace ? ' ' : '') + afterText;
-                    
-                    // Set the cursor position
-                    const newRange = document.createRange();
-                    const newPosition = start - currentOffset + targetWord.length + (willAddSpace ? 1 : 0);
-                    newRange.setStart(currentNode, Math.min(newPosition, currentNode.textContent.length));
-                    newRange.collapse(true);
-                    selection.removeAllRanges();
-                    selection.addRange(newRange);
-                    break;
-                }
-            }
-            currentOffset += nodeLength;
-            currentNode = currentNode.nextSibling;
+          const nodeLength = currentNode.textContent?.length || 0;
+          if (
+            currentOffset + nodeLength >= start &&
+            currentNode.nodeType === Node.TEXT_NODE
+          ) {
+            currentNode.textContent = contentToCopy.substring(0, nextWordStart);
+  
+            const newRange = document.createRange();
+            newRange.setStart(currentNode, nextWordStart);
+            newRange.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(newRange);
+            break;
+          }
+          currentOffset += nodeLength;
+          currentNode = currentNode.nextSibling;
         }
-        
         return true;
+      }
     }
-
+  
+    // Only replace if we're at a word boundary
+    if (currentPosition > start && (e.key === " " || currentPosition === end)) {
+      let currentNode = writer.firstChild;
+      let currentOffset = 0;
+  
+      while (currentNode) {
+        const nodeLength = currentNode.textContent?.length || 0;
+        if (currentOffset + nodeLength >= start) {
+          if (currentNode.nodeType === Node.TEXT_NODE) {
+            const beforeText =
+              currentNode.textContent?.slice(0, start - currentOffset) || "";
+            const afterText =
+              currentNode.textContent?.slice(end - currentOffset) || "";
+  
+            // Include punctuation in the completion
+            currentNode.textContent =
+              beforeText + contentToCopy.slice(start, end + 1) + afterText;
+  
+            // Position cursor after punctuation if it exists
+            const newPosition = start - currentOffset + targetWord.length;
+            const newRange = document.createRange();
+            newRange.setStart(
+              currentNode,
+              Math.min(newPosition + 1, currentNode.textContent.length)
+            );
+            newRange.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(newRange);
+            break;
+          }
+        }
+        currentOffset += nodeLength;
+        currentNode = currentNode.nextSibling;
+      }
+  
+      return true;
+    }
+  
     return false;
-}
+  }
